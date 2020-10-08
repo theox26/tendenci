@@ -376,7 +376,7 @@ def search(request, redirect=False, past=False, template_name="events/search.htm
     if form.is_valid():
         with_registration = form.cleaned_data.get('registration', None)
         event_type = form.cleaned_data.get('event_type', None)
-        event_group = form.cleaned_data.get('event_group', None)
+        day_of_week = form.cleaned_data.get('day_of_week', None)
         start_dt = form.cleaned_data.get('start_dt', None)
         end_dt = form.cleaned_data.get('end_dt', None)
         cat = form.cleaned_data.get('search_category', None)
@@ -396,8 +396,9 @@ def search(request, redirect=False, past=False, template_name="events/search.htm
 
         if event_type:
             events = events.filter(type__slug=event_type)
-        if event_group:
-            events = events.filter(groups__id=event_group)
+        # day of week is based on the start date and end date specifically because anything in between doesn't count
+        if day_of_week:
+            events = events.filter(Q(**{'start_dt__week_day' : day_of_week}) | Q(**{'end_dt__week_day' : day_of_week}))
 
     if past:
         start_dt = None

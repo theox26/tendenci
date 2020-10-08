@@ -100,6 +100,18 @@ SEARCH_CATEGORIES = (
     ('priority', _('Priority Events')),
 )
 
+# Numbered to match Postgres DateTime settings
+DAYS_OF_WEEK = (
+    ('', _('Day Of Week')),
+    ('1', _('Sunday')),
+    ('2', _('Monday')),
+    ('3', _('Tuesday')),
+    ('4', _('Wednesday')),
+    ('5', _('Thursday')),
+    ('6', _('Friday')),
+    ('7', _('Saturday')),
+)
+
 
 def management_forms_tampered(formsets=None):
     """
@@ -151,9 +163,10 @@ class EventSearchForm(forms.Form):
                                widget=forms.TextInput(attrs={'class': 'datepicker'}))
     event_type = forms.ChoiceField(label=_('Event Type'), required=False, choices=[])
     event_group = forms.ChoiceField(label=_('Event Group'), required=False, choices=[])
+    day_of_week = forms.ChoiceField(label=_('Day of Week'), required=False, choices=DAYS_OF_WEEK)
     registration = forms.BooleanField(label=_("Events I Have Registered For"), required=False)
     search_category = forms.ChoiceField(choices=SEARCH_CATEGORIES_ADMIN, required=False)
-    q = forms.CharField(required=False)
+    q = forms.CharField(initial=_("Keyword Search"), required=False)
 
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
@@ -167,8 +180,8 @@ class EventSearchForm(forms.Form):
         type_choices = Type.objects.all().order_by('name').values_list('slug', 'name')
         self.fields['event_type'].choices = [('','Event Type')] + list(type_choices)
 
-        group_choices = get_search_group_choices()
-        self.fields['event_group'].choices = [('','All')] + list(group_choices)
+        #group_choices = get_search_group_choices()
+        #self.fields['event_group'].choices = [('','All')] + list(group_choices)
 
         self.fields['start_dt'].initial = datetime.now().strftime('%Y-%m-%d')
         
