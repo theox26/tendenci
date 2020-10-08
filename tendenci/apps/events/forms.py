@@ -165,7 +165,7 @@ class EventSearchForm(forms.Form):
             self.fields['search_category'].choices = SEARCH_CATEGORIES
 
         type_choices = Type.objects.all().order_by('name').values_list('slug', 'name')
-        self.fields['event_type'].choices = [('','All')] + list(type_choices)
+        self.fields['event_type'].choices = [('','Event Type')] + list(type_choices)
 
         group_choices = get_search_group_choices()
         self.fields['event_group'].choices = [('','All')] + list(group_choices)
@@ -186,16 +186,6 @@ class EventSearchForm(forms.Form):
         cleaned_data = self.cleaned_data
         q = self.cleaned_data.get('q', None)
         cat = self.cleaned_data.get('search_category', None)
-
-        if cat is None or cat == "" :
-            if not (q is None or q == ""):
-                self._errors['search_category'] =  ErrorList([_('Select a category')])
-
-        if cat in ('id', 'owner__id', 'creator__id') :
-            try:
-                int(q)
-            except ValueError:
-                self._errors['q'] = ErrorList([_('IDs must be an integer')])
 
         return cleaned_data
 

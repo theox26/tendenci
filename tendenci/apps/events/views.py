@@ -391,8 +391,8 @@ def search(request, redirect=False, past=False, template_name="events/search.htm
 
         if cat == 'priority':
             events = events.filter(**{cat : True })
-        elif query and cat:
-            events = events.filter(**{cat : query})
+        elif query:
+            events = events.filter(Q(**{'title__icontains' : query}) | Q(**{'description__icontains' : query}) | Q(**{'tags__icontains' : query}))
 
         if event_type:
             events = events.filter(type__slug=event_type)
@@ -400,15 +400,16 @@ def search(request, redirect=False, past=False, template_name="events/search.htm
             events = events.filter(groups__id=event_group)
 
     if past:
-        filter_op = 'lt'
-        end_dt_filter_op = 'gte'
-    else:
-        filter_op = 'gte'
-        end_dt_filter_op = 'lt'
+        start_dt = None
+        end_dt = datetime.now()
+    
+    filter_op = 'gte'
+    end_dt_filter_op = 'lte'
 
-    start_date_filter1 = {'start_dt__%s' %filter_op: start_dt}
-    start_date_filter2 = {'end_dt__%s' % filter_op: start_dt }
-    events = events.filter(Q(**start_date_filter1) | Q(**start_date_filter2))
+    if start_dt:
+        start_date_filter1 = {'start_dt__%s' %filter_op: start_dt}
+        start_date_filter2 = {'end_dt__%s' % filter_op: start_dt }
+        events = events.filter(Q(**start_date_filter1) | Q(**start_date_filter2))
     if end_dt:
         end_date_filter1 = {'start_dt__%s' % end_dt_filter_op: end_dt}
         end_date_filter2 = {'end_dt__%s' % end_dt_filter_op: end_dt }
