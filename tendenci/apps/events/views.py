@@ -383,11 +383,15 @@ def search(request, redirect=False, past=False, template_name="events/search.htm
         try:
             start_dt = datetime.strptime(start_dt, '%Y-%m-%d')
         except:
-            start_dt = datetime.now()
+            start_dt = None
         try:
             end_dt = datetime.strptime(end_dt, '%Y-%m-%d')
         except:
             end_dt = None
+
+        # allow for the past to use end date instead of start date
+        if not start_dt and not end_dt:
+            start_dt = datetime.now()
 
         if cat == 'priority':
             events = events.filter(**{cat : True })

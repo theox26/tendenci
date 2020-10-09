@@ -1,3 +1,4 @@
+/* This is the Theme version */
 .t h2 {
     margin: 0 auto 10px 0;
 }
@@ -88,9 +89,9 @@
 
 .t form.search-form input[type="text"],
 form.search-form input[type="text"] {
-    width: 50%;
+    /* width: 50%; */
     margin-bottom: 10px;
-    padding: 5px;
+    /* padding: 5px; */
 }
 .t form.search-form input[type="text"].datepicker {
     width: 70px;
@@ -484,7 +485,7 @@ div.type-wrap .type-item .associated-events li{
     width: 100%;
 }
 
-ul.errorlist {;
+ul.errorlist {
     margin-left: 0;
 }
 
