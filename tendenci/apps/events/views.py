@@ -371,7 +371,7 @@ def search(request, redirect=False, past=False, template_name="events/search.htm
     end_dt = None
     event_type = ''
     with_registration = None
-    form = EventSearchForm(request.GET or {'start_dt':start_dt.strftime('%Y-%m-%d')},
+    form = EventSearchForm(request.GET or {'start_dt':start_dt.strftime('%m/%d/%Y')},
                            user=request.user)
     if form.is_valid():
         with_registration = form.cleaned_data.get('registration', None)
@@ -381,11 +381,11 @@ def search(request, redirect=False, past=False, template_name="events/search.htm
         end_dt = form.cleaned_data.get('end_dt', None)
         cat = form.cleaned_data.get('search_category', None)
         try:
-            start_dt = datetime.strptime(start_dt, '%Y-%m-%d')
+            start_dt = datetime.strptime(start_dt, '%m/%d/%Y')
         except:
             start_dt = None
         try:
-            end_dt = datetime.strptime(end_dt, '%Y-%m-%d')
+            end_dt = datetime.strptime(end_dt, '%m/%d/%Y')
         except:
             end_dt = None
 

@@ -183,7 +183,7 @@ class EventSearchForm(forms.Form):
         #group_choices = get_search_group_choices()
         #self.fields['event_group'].choices = [('','All')] + list(group_choices)
 
-        self.fields['start_dt'].initial = datetime.now().strftime('%Y-%m-%d')
+        self.fields['start_dt'].initial = datetime.now().strftime('%m/%d/%Y')
         
         for field in self.fields:
             if field not in ['registration']:
