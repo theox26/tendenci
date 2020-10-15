@@ -1,3 +1,127 @@
+### 12.2.8 [2020-09-30]
+
+* Updated format for corporate membership view to avoid long labels being cut off
+
+### 12.2.7 [2020-09-30]
+
+* Fixed corp_membership encoding detection (Thanks @evanspaeder)
+* Added an edit button for admin on pending corp membership for easy editing
+* Fixed a potential encoding issue on memberships import
+* Updated memberships and corporate membership imports to use detected encoding instead of hard-coded utf-8
+* Updated the corporate membership add to redirect anonymous user to login instead of add_pre if "public can view" is unchecked
+* Formated the pricing end date to also show year  #889
+* Resolved corporate membership types not being imported along with their associated corporate memberships 
+
+### 12.2.6 [2020-09-28]
+
+* Fixed default value not working for boolean field on corporate membership application.
+* Fixed profile/add form username limits #894 (Thanks @evanspaeder)
+* Fixed duplicate slug error on membership app clone #893
+* Fixed newsletters are not searchable in Event Logs #892
+* Applied strip_control_chars to feed for articles and news to resolve an UnserializableContentError: Control characters are not supported in XML 1.0.
+
+
+### 12.2.5 [2020-09-25]
+
+* Fixed an error in corporate memberships import (Thanks @evanspaeder)
+* Added missing phone2 field to corp profile (The phone2 field exists on app, but was missing in CorpProfile model).
+
+### 12.2.3 [2020-09-23]
+
+* Fixed links on the full settings list not being linked to the specific settings.
+* Avoided using the same ud fields for cloned membership applications because same UD fields can't be re-used across applications.
+* Resolved a permission issue on deleting unneeded membership applications (and corporate membership applications).
+
+### 12.2.2 [2020-09-17]
+
+* Directory owners can view and edit their directories, but only admin can publish directories that are created with memberships and corporate memberships.
+* Updated memberships to have email address take precedence over first name and last name when assigning a username.
+* Added the link to directory listing, if any, on user profile and at the bottom of corp member profile.
+* Added the link to corp member profile, if any, on directory listing. 
+* Updated post-install-checklist.txt for newsletters settings.
+* Updated boto3 to 1.12.8 and django-ses to 1.0.3.
+* Fixed the issue about pricing 0.00 not working for custom forms.
+* Resolved the issue regarding custom forms showing page's nav menu instead of form's when a custom template is selected.
+
+### 12.2.1 [2020-09-08]
+
+* Adjusted (or corrected) the files path for files uploaded in wysiwyg editor. For example, files uploaded in pages will go to files/page/, files uploaded in boxes will go to files/box...
+* Files access of custom forms is restricted only to those who have the forms change permission rather than view permission.
+
+### 12.2 [2020-09-05]
+
+**New Features and Improvements**
+
+* An oauth2 client for tendenci that you can use to set up single sign-on (SSO)
+* Added an option to add a directory for memberships on join approval
+* Directory owner or creator can publish their directories if they are created with their memberships or corporate memberships
+* If directory for memberships or corporate memberships is enabled, admin can add a directory and associate it with an existing membership or corp membership.
+* Included `directory_url` and `directory_edit_url` tags for membership and corporate membership notices so that they can be added in the approval notifications to link members to their directory view and edit pages
+* Added the support for LibreOffice/OpenOffice Document upload (Thanks evanspaeder)
+
+**Fixes**
+
+* Updated django version to 2.2.16 (Django 2.2.16 fixes two security issues and two data loss bugs in 2.2.15)
+* Fixed max_length for creator_username and owner_username fields that does not match with username's (Thanks evanspaeder)
+* Fixed a DataError in event registration
+* Fixed the issue about selected groups being de-selected on event pricing edit
+
+### 12.1.1 [2020-08-21]
+
+* Adjusted MEMCACHE_MAX_KEY_LENGTH 247 to resolve the InvalidCacheKey error
+* Added the exclude_expired option to the list_corporate_memberships 
+
+### 12.1 [2020-08-14]
+
+* New feature: Donation option on corporate memberships renewal
+* Changed the updated date to event date for events list generated for newsletters
+* Fixed an InvalidCacheKey error
+* Resolved the issue regarding multiple tags cannot be searched in files search
+* Updated the memberships list at admin backend to include the view and profile columns
+* Updated group slug pattern to fix a potential NoReverseMatch error when a forward slash (/) is included in the slug. 
+
+### 12.0.14 [2020-08-09]
+
+* Applied FileValidator to file fields for membership and corp membership forms
+
+### 12.0.13 [2020-08-07]
+
+* Updated Django version to 2.2.15
+* Added the approved/denied info in the admin area on membership details page
+* Included entity_type to the entities list_display
+* Made entity a OneToOneField in directory
+* Added an option to add a directory for corporate memberships on join
+* Added the missing parent_entity field to corp app 1
+* Fixed an error in email send due to None Reply-To
+* Fixed a AttributeError: 'NoneType' object has no attribute 'email' 
+* Made file perms match with the setting "Member Protection"
+
+### 12.0.12 [2020-07-30]
+
+* Updated django-ses to 1.0.2
+* Updated Pillow to 7.2.0
+* Updated django version to 2.2.14
+* added top nav options for photo set
+* Updated photo set details view to make photos span the full width of the page
+* Made regions sortable
+* Added region field to directories
+* Added two settings, FILE_UPLOAD_DIRECTORY_PERMISSIONS and FILE_UPLOAD_PERMISSIONS, for file upload permissions
+* Included edit link and app id to the memberships fields list
+* Removed bad test data (test and testing) from corp membership default fixture
+* Avoided corp memberships approval email being sent twice
+* Updated tendenci_default_boxes.json
+* Resolved the issue on corporate membership add when the company name entered exists but soft deleted
+* Fixed top menu unreadable in mobile 
+* Fixed tag not working in files search
+* Fixed the issue about the enabled zip code field not displaying in the event registrant edit
+* Updaed and fixed some issues for iCalendar
+* Resolved the issue about event attendees not being linked if "Display Attendees" is turned on
+* Added missing trailing slash for events attendees page
+* Fixed articles not being created from cloned newsletters
+* Fixed OSError: cannot write mode RGBA as JPEG
+* Fixed an import error in model_report for python3.8 (Thanks @theox26 and Aaron Oxenrider)
+
+
 ### 12.0.11 [2020-06-24]
 
 * Added tendenci console script for nice install command  (Thanks @iokiwi)

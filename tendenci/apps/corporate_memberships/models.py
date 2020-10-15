@@ -17,6 +17,7 @@ from django.contrib.contenttypes.fields import GenericRelation
 from django.utils.safestring import mark_safe
 from django.db.models import Q
 from django.db.models.signals import post_delete
+from django.template.defaultfilters import slugify
 
 #from django.contrib.contenttypes.models import ContentType
 from tendenci.libs.tinymce import models as tinymce_models
@@ -25,6 +26,7 @@ from tendenci.libs.tinymce import models as tinymce_models
 from tendenci.apps.site_settings.utils import get_setting
 from tendenci.apps.perms.models import TendenciBaseModel
 from tendenci.apps.entities.models import Entity
+from tendenci.apps.directories.models import Directory
 from tendenci.apps.invoices.models import Invoice
 from tendenci.apps.memberships.models import (MembershipType,
                                                 MembershipApp,
@@ -58,6 +60,7 @@ from tendenci.apps.events.models import Event, Registrant
 from tendenci.apps.base.utils import truncate_words
 from tendenci.apps.perms.utils import has_perm
 from tendenci.apps.files.models import File
+from tendenci.apps.files.validators import FileValidator
 from tendenci.apps.user_groups.models import Group
 
 
@@ -199,6 +202,8 @@ class CorpProfile(TendenciBaseModel):
                                blank=True, default='')
     phone = models.CharField(_('Phone'), max_length=50,
                              blank=True, default='')
+    phone2 = models.CharField(_('phone2'), max_length=50,
+                              blank=True, default='')
     email = models.CharField(_('Email'), max_length=200,
                              blank=True, default='')
     url = models.CharField(_('URL'), max_length=100, blank=True,
@@ -212,6 +217,8 @@ class CorpProfile(TendenciBaseModel):
     number_employees = models.IntegerField(default=0)
     chapter = models.CharField(_('Chapter'), max_length=150,
                                blank=True, default='')
+    directory = models.OneToOneField(Directory, blank=True, null=True,
+                                  on_delete=models.SET_NULL,)
     tax_exempt = models.BooleanField(_("Tax exempt"), default=False)
 
     annual_revenue = models.CharField(_('Annual revenue'), max_length=75,
@@ -258,6 +265,7 @@ class CorpProfile(TendenciBaseModel):
             # create an entity
             entity = Entity.objects.create(
                     entity_name=self.name,
+                    entity_type='Corporate Membership',
                     entity_parent = self.parent_entity,
                     email=self.email,
                     allow_anonymous_view=False)
@@ -362,6 +370,48 @@ class CorpProfile(TendenciBaseModel):
         [rep] = self.reps.filter(is_dues_rep=True)[:1] or [None]
         return rep
 
+    def get_directory_slug(self):
+        slug = slugify(self.name)
+        if Directory.objects.filter(slug=slug).exists():
+            slug = '{slug}-corp-{id}'.format(slug=slug, id=self.id)
+        return slug
+
+    def add_directory(self):
+        if get_setting('module',  'corporate_memberships', 'adddirectory'):
+            if not self.directory:
+                # 'entity_parent': self.entity,
+                directory_entity = Entity.objects.create(
+                                    entity_name=self.name,
+                                    entity_type='Directory',
+                                    entity_parent = self.entity,
+                                    email=self.email,
+                                    allow_anonymous_view=False)
+                params = {'entity': directory_entity,
+                          'headline':  self.name,
+                          'slug': self.get_directory_slug(),
+                          'guid': str(uuid.uuid4()),
+                          'address': self.address,
+                          'address2': self.address2,
+                          'city': self.city,
+                          'state': self.state,
+                          'zip_code': self.zip,
+                          'country': self.country,
+                          'region': self.region,
+                          'phone': self.phone,
+                          'email': self.email,
+                          'website': self.url,
+                          'allow_anonymous_view': self.allow_anonymous_view,
+                          'allow_user_view': self.allow_user_view,
+                          'allow_member_view': self.allow_member_view,
+                          'creator': self.creator,
+                          'creator_username': self.creator_username,
+                          'owner': self.owner,
+                          'owner_username': self.owner_username,
+                          'status_detail': 'pending'
+                          }
+                self.directory = Directory.objects.create(**params)
+                self.save()
+
 
 class CorpMembership(TendenciBaseModel):
     guid = models.CharField(max_length=50)
@@ -393,6 +443,7 @@ class CorpMembership(TendenciBaseModel):
                                        on_delete=models.SET_NULL)
 
     invoice = models.ForeignKey(Invoice, blank=True, null=True, on_delete=models.SET_NULL)
+    donation_amount = models.DecimalField(max_digits=15, decimal_places=2, blank=True, default=0)
 
     anonymous_creator = models.ForeignKey('Creator', null=True, on_delete=models.SET_NULL)
     admin_notes = models.TextField(_('Admin notes'),
@@ -425,6 +476,7 @@ class CorpMembership(TendenciBaseModel):
         else:
             verbose_name = _("Corporate Membership")
             verbose_name_plural = _("Corporate Memberships")
+        permissions = (("approve_corpmembership", _("Can approve corporate memberships")),)
         app_label = 'corporate_memberships'
 
     def __str__(self):
@@ -726,7 +778,7 @@ class CorpMembership(TendenciBaseModel):
     def copy(self):
         corp_membership = self.__class__()
         field_names = [field.name for field in self.__class__._meta.fields]
-        ignore_fields = ['id', 'renewal', 'renew_dt', 'status',
+        ignore_fields = ['id', 'renewal', 'renew_dt', 'status', 'donation_amount',
                          'status_detail', 'approved', 'approved_denied_dt',
                          'approved_denied_user', 'anonymous_creator']
         for field in ignore_fields:
@@ -796,6 +848,10 @@ class CorpMembership(TendenciBaseModel):
 
         created, username, password = self.handle_anonymous_creator(**kwargs)
 
+        if get_setting('module',  'corporate_memberships', 'adddirectory'):
+            # add a directory entry for this corp
+            self.corp_profile.add_directory()
+
         # create salesforce lead if applicable
         sf = get_salesforce_access()
         if sf:
@@ -828,7 +884,10 @@ class CorpMembership(TendenciBaseModel):
         else:
             # send an email to dues reps
             recipients = dues_rep_emails_list(self)
-            recipients.append(self.creator.email)
+            if self.creator:
+                recipients.append(self.creator.email)
+            # avoid duplicate emails
+            recipients = set(recipients)
             extra_context = {
                 'object': self,
                 'request': request,
@@ -887,6 +946,13 @@ class CorpMembership(TendenciBaseModel):
                 self.owner = request_user
                 self.owner_username = request_user.username
             self.save()
+            
+            # directory
+            if self.corp_profile.directory:
+                directory = self.corp_profile.directory
+                if directory.status_detail != 'active':
+                    directory.status_detail = 'active'
+                    directory.save()
 
             # 2) approve the individual memberships
             group = self.corporate_membership_type.membership_type.group
@@ -1036,6 +1102,12 @@ class CorpMembership(TendenciBaseModel):
             self.owner = assign_to_user
             self.owner_username = assign_to_user.username
             self.save()
+            
+            self.corp_profile.creator = self.creator
+            self.corp_profile.creator_username = self.creator_username
+            self.corp_profile.owner = self.owner
+            self.corp_profile.owner_username = self.owner_username
+            self.corp_profile.save()
 
             # assign creator to be dues_rep
             if not CorpMembershipRep.objects.filter(
@@ -1091,9 +1163,10 @@ class CorpMembership(TendenciBaseModel):
         return False
 
     def allow_edit_by(self, this_user):
-        if self.is_active or self.is_expired:
-            if this_user.profile.is_superuser:
+        if this_user.profile.is_superuser:
                 return True
+
+        if self.is_active or self.is_expired:
             if has_perm(this_user, 'corporate_memberships.change_corpmembership'):
                 return True
 
@@ -1107,6 +1180,10 @@ class CorpMembership(TendenciBaseModel):
                     if self.owner:
                         if this_user.id == self.owner.id:
                             return True
+
+        # if they can approve, they can edit the pending corporate membership             
+        if self.is_pending and has_perm(this_user, 'corporate_memberships.approve_corpmembership'):
+            return True
 
         return False
 
@@ -1375,6 +1452,11 @@ class CorpMembershipApp(TendenciBaseModel):
     tax_rate = models.DecimalField(blank=True, max_digits=5, decimal_places=4, default=0,
                                    help_text=_('Example: 0.0825 for 8.25%.'))
 
+    donation_enabled = models.BooleanField(_("Enable Donation on Renewal"), default=False)
+    donation_label = models.CharField(_("Label"), max_length=255, blank=True, null=True)
+    donation_default_amount = models.DecimalField(_("Default Amount"), max_digits=15,
+                                                  decimal_places=2, blank=True, default=0)
+
     dues_reps_group = models.ForeignKey(Group, null=True,
         related_name='dues_reps_group',
         on_delete=models.SET_NULL,
@@ -1597,7 +1679,12 @@ class CorpMembershipAppField(OrderingBaseModel):
                             'corporate_membership_type',
                             'payment_method']:
                     if self.choices == 'yesno':
-                        field_args["choices"] = ((1, _('Yes')), (0, _('No')),)
+                        field_args["choices"] = ((True, _('Yes')), (False, _('No')),)
+                        if self.default_value:
+                            if self.default_value.lower() == 'yes':
+                                field_args['initial'] = True
+                            elif self.default_value.lower() == 'no':
+                                field_args['initial'] = False
                     else:
                         choices = self.choices.split(",")
                         field_args["choices"] = list(zip(choices, choices))
@@ -1607,6 +1694,8 @@ class CorpMembershipAppField(OrderingBaseModel):
                 if module == 'django.forms.extras':
                     module = 'django.forms.widgets'
                 field_args["widget"] = getattr(import_module(module), widget)
+            if self.field_type == 'FileField':
+                field_args["validators"] = [FileValidator()]
 
             return field_class(**field_args)
         return None
@@ -1896,11 +1985,11 @@ class Notice(models.Model):
     creator = models.ForeignKey(
         User, related_name="corporate_membership_notice_creator",
         null=True, on_delete=models.SET_NULL)
-    creator_username = models.CharField(max_length=50, null=True)
+    creator_username = models.CharField(max_length=150, null=True)
     owner = models.ForeignKey(
         User, related_name="corporate_membership_notice_owner",
         null=True, on_delete=models.SET_NULL)
-    owner_username = models.CharField(max_length=50, null=True)
+    owner_username = models.CharField(max_length=150, null=True)
     status_detail = models.CharField(choices=STATUS_DETAIL_CHOICES,
                                      default=STATUS_DETAIL_ACTIVE, max_length=50)
     status = models.BooleanField(default=True)
@@ -1966,6 +2055,15 @@ class Notice(models.Model):
                                      corporate_membership.invoice.get_absolute_url())
         else:
             invoice_link = ''
+            
+        if corporate_membership.corp_profile.directory:
+            directory_url = '{0}{1}'.format(site_url, reverse('directory',
+                                    args=[corporate_membership.corp_profile.directory.slug]))
+            directory_edit_url = '{0}{1}'.format(site_url, reverse('directory.edit',
+                                    args=[corporate_membership.corp_profile.directory.id]))
+        else:
+            directory_url = ''
+            directory_edit_url = ''
 
         corp_app = CorpMembershipApp.objects.current_app()
         authentication_info = render_to_string(
@@ -1986,6 +2084,8 @@ class Notice(models.Model):
             'renew_link': "%s%s" % (site_url,
                                     corporate_membership.get_renewal_url()),
             'invoice_link': invoice_link,
+            'directory_url': directory_url,
+            'directory_edit_url': directory_edit_url,
             'individuals_join_url': '%s%s' % (site_url,
                                 reverse('membership_default.corp_pre_add',
                                         args=[corporate_membership.id])),
@@ -2097,7 +2197,7 @@ class Notice(models.Model):
                                     recipient=recipient,
                                     anonymous_join_login_info=anonymous_join_login_info),
                         'corporate_membership_total': CorpMembership.objects.count(),
-                        'sender': notice.sender,
+                        'sender': get_setting('site', 'global', 'siteemailnoreplyaddress'),
                         'sender_display': notice.sender_display,
                     }
                     if notice.sender:

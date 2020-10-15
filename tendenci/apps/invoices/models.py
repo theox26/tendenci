@@ -28,9 +28,9 @@ class Invoice(models.Model):
     _object = GenericForeignKey('object_type', 'object_id')
     title = models.CharField(max_length=200, blank=True, null=True)
     creator = models.ForeignKey(User, related_name="invoice_creator", null=True, on_delete=models.SET_NULL)
-    creator_username = models.CharField(max_length=50, null=True)
+    creator_username = models.CharField(max_length=150, null=True)
     owner = models.ForeignKey(User, related_name="invoice_owner", null=True, on_delete=models.SET_NULL)
-    owner_username = models.CharField(max_length=50, null=True)
+    owner_username = models.CharField(max_length=150, null=True)
     entity = models.ForeignKey(Entity, blank=True, null=True, default=None, on_delete=models.SET_NULL, related_name="invoices")
     create_dt = models.DateTimeField(auto_now_add=True)
     due_date = models.DateTimeField()
@@ -223,7 +223,16 @@ class Invoice(models.Model):
         if not self.entity_id and self.object_type:
             self.entity = self.get_entity()
 
+        self.verifydata()
         super(Invoice, self).save()
+
+    def verifydata(self):
+        # verify each field
+        for field in Invoice._meta.fields:
+            value = getattr(self, field.name)
+            if field.max_length and value and len(value) > field.max_length:
+                value = value[:field.max_length]
+                setattr(self, field.name, value)
 
     def delete(self, *args, **kwargs):
         """

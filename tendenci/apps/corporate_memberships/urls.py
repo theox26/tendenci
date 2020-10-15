@@ -15,6 +15,7 @@ urlpatterns = [
     url(r"^%s/get_app_fields/$" % urlpath,
         views.get_app_fields_json,
         name="corpmemberships.get_app_fields"),
+    url(r"^%s/add_directory/(?P<id>\d+)/$" % urlpath, views.corp_membership_add_directory, name="corp_membership.add_directory"),
 
     url(r"^%s/applications/(?P<slug>[\w\-]+)/preview/$" % urlpath,
         views.app_preview,  name="corpmembership_app.preview"),
@@ -106,6 +107,7 @@ urlpatterns = [
 
 
     # reports
+    url(r'^%s/reports/corp_members_donated/$' % urlpath, views.corp_members_donated, name='reports-corp-members-donated'),
     url(r"^%s/reports/active_members_by_type/$" % urlpath, views.report_active_corp_members_by_type, name="reports-active-corp-mems-by-type"),
     url(r"^%s/reports/corp_members_by_status/$" % urlpath, views.report_corp_members_by_status, name="reports-corp-mems-by-status"),
     url(r"^%s/reports/corp_mems_over_time/$" % urlpath, views.new_over_time_report, name="reports-corp-mems-over-time"),

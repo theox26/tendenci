@@ -316,7 +316,9 @@ class MembershipDefaultAdmin(admin.ModelAdmin):
 
     list_display = [
         'id',
-        'name',
+        'edit_link',
+        'view_on_site',
+        'user_profile',
         'email',
         'member_number',
         'membership_type_link',
@@ -330,7 +332,7 @@ class MembershipDefaultAdmin(admin.ModelAdmin):
     list_display.append('admin_notes')
     list_display.append('reminder')
     list_editable = ['reminder',]
-    list_display_links = ('name',)
+    list_display_links = ('edit_link',)
 
     list_filter = [
         MembershipStatusDetailFilter,
@@ -372,14 +374,31 @@ class MembershipDefaultAdmin(admin.ModelAdmin):
 
         return fieldsets
 
-    def name(self, instance):
-        name = '%s %s' % (
-            instance.user.first_name,
-            instance.user.last_name,
+    def edit_link(self, obj):
+        return "Edit"
+    edit_link.short_description = _('edit')
+
+    @mark_safe
+    def view_on_site(self, obj):
+        if not hasattr(obj, 'get_absolute_url'):
+            return None
+
+        link_icon = static('images/icons/external_16x16.png')
+        link = '<a href="%s" title="%s"><img src="%s" alt="external_16x16" title="external icon"/></a>' % (
+            obj.get_absolute_url(),
+            obj,
+            link_icon,
         )
-        name.strip()
-        return name
-    name.admin_order_field = 'user__last_name'
+        return link
+    view_on_site.short_description = _('view')
+
+    @mark_safe
+    def user_profile(self, instance):
+        return '<a href="%s">%s</a>' % (
+              reverse('profile', args=[instance.user.username]),
+              instance.user.get_full_name() or instance.user.username,)
+    user_profile.short_description = _('User Profile')
+    user_profile.admin_order_field = 'user__last_name'
 
     def email(self, instance):
         return instance.user.email
@@ -894,10 +913,10 @@ class AppListFilter(SimpleListFilter):
 
 class MembershipAppField2Admin(admin.ModelAdmin):
     model = MembershipAppField
-    list_display = ['id', 'label', 'field_name', 'display',
+    list_display = ['id', 'edit_link', 'label', 'field_name', 'app_id', 'display',
               'required', 'admin_only', 'position',
               ]
-    list_display_links = ('label',)
+    list_display_links = ('edit_link',)
 
     readonly_fields = ('membership_app', 'field_name')
 
@@ -912,6 +931,14 @@ class MembershipAppField2Admin(admin.ModelAdmin):
             '//ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js',
             static('js/admin/admin-list-reorder.js'),
         )
+
+    def edit_link(self, obj):
+        return "Edit"
+    edit_link.short_description = _('edit')
+
+    def app_id(self, obj):
+        return obj.membership_app.id
+    app_id.short_description = _('App ID')
 
     def get_fieldsets(self, request, obj=None):
         extra_fields = ['description', 'help_text',
@@ -943,8 +970,12 @@ class MembershipAppField2Admin(admin.ModelAdmin):
 
         return obj
 
-    def has_delete_permission(self, request, obj=None):
-        return False
+    def change_view(self, request, object_id=None, form_url='', extra_context=None):
+        return super(MembershipAppField2Admin, self).change_view(request, object_id, form_url,
+                               extra_context=dict(show_delete=False))
+
+#     def has_delete_permission(self, request, obj=None):
+#         return False
 
     def has_add_permission(self, request):
         return False

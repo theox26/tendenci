@@ -24,10 +24,10 @@ class TendenciBaseModel(models.Model):
     update_dt = models.DateTimeField(_("Last Updated"), auto_now=True)
     creator = models.ForeignKey(User, null=True, default=None, on_delete=models.SET_NULL,
         related_name="%(app_label)s_%(class)s_creator", editable=False)
-    creator_username = models.CharField(max_length=50)
+    creator_username = models.CharField(max_length=150)
     owner = models.ForeignKey(User, null=True, default=None, on_delete=models.SET_NULL,
         related_name="%(app_label)s_%(class)s_owner")
-    owner_username = models.CharField(max_length=50)
+    owner_username = models.CharField(max_length=150)
     status = models.BooleanField("Active", default=True)
     status_detail = models.CharField(max_length=50, default='active')
 
@@ -74,6 +74,41 @@ class TendenciBaseModel(models.Model):
                 value = t % (obj.status_detail, obj.status_detail.capitalize())
         else:
             value = t % ('inactive', 'Inactive')
+
+        return mark_safe(value)
+
+    @property
+    def obj_lock(self):
+        from tendenci.apps.perms.fields import has_groups_perms
+        t = '<i style="color:{color};" title="{perm}, {status}" class="fa fa-{lock_type}" aria-hidden="true"></i>'
+
+        color = 'brown'
+        lock_type = 'unlock-alt'
+        if self.allow_anonymous_view:
+            perm = 'Public'
+        elif self.allow_user_view:
+            perm = 'Users'
+            lock_type = 'lock'
+        elif self.allow_member_view:
+            perm = 'Members'
+            lock_type = 'lock'
+        elif has_groups_perms(self):
+            perm = 'Groups'
+            lock_type = 'lock'
+        else:
+            perm = 'Private'
+            color = 'red'
+            lock_type = 'lock'
+
+        if self.status and self.status_detail == 'active':
+            if self.allow_anonymous_view:
+                color = 'green'
+                perm = 'Public'
+        else:
+            color = 'red'
+            lock_type = 'lock'
+
+        value = t.format(color=color, perm=perm, status=self.status_detail, lock_type=lock_type)
 
         return mark_safe(value)
 

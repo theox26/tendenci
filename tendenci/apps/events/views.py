@@ -271,6 +271,7 @@ def details(request, id=None, private_slug=u'', template_name="events/view.html"
     if pricing:
         pricing = pricing.order_by('position', '-price')
         free_event = not bool([p for p in pricing if p.price > 0])
+    can_view_attendees = event.can_view_registrants(request.user)
 
     return render_to_resp(request=request, template_name=template_name, context={
         'days': days,
@@ -285,7 +286,8 @@ def details(request, id=None, private_slug=u'', template_name="events/view.html"
         'speaker_files': speaker_files,
         'organizer_files': organizer_files,
         'place_files': place_files,
-        'free_event': free_event
+        'free_event': free_event,
+        'can_view_attendees': can_view_attendees
     })
 
 
@@ -492,7 +494,7 @@ def icalendar(request):
             ics.close()
     if not ics_str:
         ics_str = "BEGIN:VCALENDAR\r\n"  
-        ics_str += "PRODID:-//Tendenci - The Open Source AMS for Associations//Tendenci 11.0 MIMEDIR//EN\r\n"
+        ics_str += "PRODID:-//Tendenci - The Open Source AMS for Associations//Tendenci 12 MIMEDIR//EN\r\n"
         ics_str += "VERSION:2.0\r\n"
         ics_str += "METHOD:PUBLISH\r\n"
 
@@ -509,9 +511,13 @@ def icalendar(request):
     return response
 
 
-def icalendar_single(request, id):
+def icalendar_single(request, id, guid=''):
+    reg8n_guid = guid
+    reg8n_id = request.GET.get('reg8n_id')
+    
     p = re.compile(r'http(s)?://(www.)?([^/]+)')
-    d = {}
+    d = {'reg8n_guid': reg8n_guid,
+         'reg8n_id': reg8n_id}
 
     if not Event.objects.filter(pk=id).exists():
         raise Http404
@@ -524,7 +530,7 @@ def icalendar_single(request, id):
         d['domain_name'] = ""
 
     ics_str = "BEGIN:VCALENDAR\r\n"
-    ics_str += "PRODID:-//Tendenci - The Open Source AMS for Associations//Tendenci Codebase 11.0 MIMEDIR//EN\r\n"
+    ics_str += "PRODID:-//Tendenci - The Open Source AMS for Associations//Tendenci Codebase 12 MIMEDIR//EN\r\n"
     ics_str += "VERSION:2.0\r\n"
     ics_str += "METHOD:PUBLISH\r\n"
 
@@ -2606,8 +2612,9 @@ def registration_edit(request, reg8n_id=0, hash='', template_name="events/reg8n/
         fields=('salutation', 'first_name', 'last_name', 'mail_name', 'email',
                     'position_title', 'company_name', 'phone', 'address', 'city',
                     'state', 'zip', 'country', 'meal_option', 'comments')
-        fields = [field_name for field_name in fields if get_setting(
-                            'module', 'events', 'regform_%s_visible' % field_name)]
+        fields = [field_name for field_name in fields 
+                     if ((get_setting('module', 'events', 'regform_%s_visible' % field_name) and field_name != 'zip')\
+                        or (field_name == 'zip' and get_setting('module', 'events', 'regform_zip_code_visible')))]
         # use modelformset_factory for regular registration form
         RegistrantFormSet = modelformset_factory(
             Registrant, extra=0,

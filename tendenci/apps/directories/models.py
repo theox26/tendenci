@@ -25,13 +25,16 @@ from tendenci.apps.directories.module_meta import DirectoryMeta
 from tendenci.apps.directories.managers import DirectoryManager
 from tendenci.apps.directories.choices import ADMIN_DURATION_CHOICES
 from tendenci.libs.boto_s3.utils import set_s3_file_permission
+from tendenci.apps.regions.models import Region
+from tendenci.apps.entities.models import Entity
+from tendenci.libs.abstracts.models import OrderingBaseModel
 
 
 def file_directory(instance, filename):
     filename = correct_filename(filename)
     return 'directories/%d/%s' % (instance.id, filename)
 
-class Category(models.Model):
+class Category(OrderingBaseModel):
     name = models.CharField(max_length=255)
     slug = models.SlugField()
     parent = models.ForeignKey('self', blank=True, null=True, related_name='children', on_delete=models.CASCADE)
@@ -39,7 +42,7 @@ class Category(models.Model):
     class Meta:
         unique_together = ('slug', 'parent',)
         verbose_name_plural = _("Categories")
-        ordering = ('name',)
+        ordering = ('position', 'name')
         app_label = 'directories'
 
     def __str__(self):
@@ -49,6 +52,8 @@ class Directory(TendenciBaseModel):
 
     guid = models.CharField(max_length=40)
     slug = SlugField(_('URL Path'), unique=True)
+    entity = models.OneToOneField(Entity, blank=True, null=True,
+                                  on_delete=models.SET_NULL,)
     timezone = TimeZoneField(verbose_name=_('Time Zone'), default='US/Central', choices=get_timezone_choices(), max_length=100)
     headline = models.CharField(_('Name'), max_length=200, blank=True)
     summary = models.TextField(blank=True)
@@ -68,6 +73,7 @@ class Directory(TendenciBaseModel):
     state = models.CharField(_('State'), max_length=50, blank=True)
     zip_code = models.CharField(_('Zip Code'), max_length=50, blank=True)
     country = models.CharField(_('Country'), max_length=50, blank=True)
+    region = models.ForeignKey(Region, blank=True, null=True, on_delete=models.SET_NULL)
     phone = models.CharField(max_length=50, blank=True)
     phone2 = models.CharField(_('Phone 2'), max_length=50, blank=True)
     fax = models.CharField(_('Fax'), max_length=50, blank=True)
@@ -108,6 +114,10 @@ class Directory(TendenciBaseModel):
                                  related_name="directory_cat", null=True, on_delete=models.SET_NULL)
     sub_cat = models.ForeignKey(Category, verbose_name=_("Sub Category"),
                                  related_name="directory_subcat", null=True, on_delete=models.SET_NULL)
+    cats = models.ManyToManyField(Category, verbose_name=_("Categories"),
+                                  related_name="directory_cats",)
+    sub_cats = models.ManyToManyField(Category, verbose_name=_("Sub Categories"),
+                                  related_name="directory_subcats",)
     # legacy categories needed for data migration
     categories = GenericRelation(CategoryItem,
                                           object_id_field="object_id",
@@ -236,6 +246,13 @@ class Directory(TendenciBaseModel):
 
     def age(self):
         return datetime.now() - self.create_dt
+    
+    def cats_list(self):
+        items = []
+        for cat in self.cats.all():
+            sub_cats = self.sub_cats.filter(parent=cat)
+            items.append((cat, list(sub_cats)))
+        return items
 
     @property
     def category_set(self):
@@ -254,6 +271,32 @@ class Directory(TendenciBaseModel):
             return True
         else:
             return False
+        
+    def has_membership_with(self, this_user):
+        """
+        Check if this directory is associated with a membership or a corporate membership
+        that this user owns. 
+        
+        Return ``True`` if this directory is associated with an active membership
+        or corporate membership, and this_user owns the membership or is a representative
+        of the corporate membership, or is the ``creator`` or ``owner`` of this directory.
+        """
+        [m] = self.membershipdefault_set.filter(status_detail='active')[:1] or [None]
+        if m:
+            if any([this_user==self.creator,
+                   this_user==self.owner,
+                   this_user==m.user]):
+                return True
+
+        if hasattr(self, 'corpprofile'):
+            corp_membership = self.corpprofile.corp_membership
+            if corp_membership and corp_membership.status_detail == 'active':
+                if any([this_user==self.creator,
+                       this_user==self.owner,
+                       self.corpprofile.is_rep(this_user)]):
+                    return True
+        return False
+
 
 class DirectoryPricing(models.Model):
     guid = models.CharField(max_length=40)
@@ -266,9 +309,9 @@ class DirectoryPricing(models.Model):
     create_dt = models.DateTimeField(auto_now_add=True)
     update_dt = models.DateTimeField(auto_now=True)
     creator = models.ForeignKey(User, related_name="directory_pricing_creator",  null=True, on_delete=models.SET_NULL)
-    creator_username = models.CharField(max_length=50, null=True)
+    creator_username = models.CharField(max_length=150, null=True)
     owner = models.ForeignKey(User, related_name="directory_pricing_owner", null=True, on_delete=models.SET_NULL)
-    owner_username = models.CharField(max_length=50, null=True)
+    owner_username = models.CharField(max_length=150, null=True)
     status = models.BooleanField(default=True)
 
     class Meta:

@@ -45,13 +45,14 @@ def details(request, slug=None, template_name="directories/view.html"):
     if not slug: return HttpResponseRedirect(reverse('directories'))
     directory = get_object_or_404(Directory, slug=slug)
 
-    if has_view_perm(request.user,'directories.view_directory',directory):
+    if has_view_perm(request.user, 'directories.view_directory', directory) \
+         or directory.has_membership_with(request.user):
         EventLog.objects.log(instance=directory)
 
         return render_to_resp(request=request, template_name=template_name,
             context={'directory': directory})
-    else:
-        raise Http403
+
+    raise Http403
 
 
 @is_enabled('directories')
@@ -73,11 +74,17 @@ def search(request, template_name="directories/search.html"):
         search_method = form.cleaned_data['search_method']
         cat = form.cleaned_data.get('cat')
         sub_cat = form.cleaned_data.get('sub_cat')
+        region = form.cleaned_data.get('region')
+        cat = [int(c) for c in cat if c.isdigit()]
+        sub_cat = [int(c) for c in sub_cat if c.isdigit()]
 
         if cat:
-            directories = directories.filter(cat=cat)
+            directories = directories.filter(cats__in=list(cat))
         if sub_cat:
-            directories = directories.filter(sub_cat=sub_cat)
+            directories = directories.filter(sub_cats__in=list(sub_cat))
+
+        if region:
+            directories = directories.filter(region=region)
 
         if query and 'tag:' in query:
             tag = query.strip('tag:')
@@ -177,6 +184,7 @@ def add(request, form_class=DirectoryForm, template_name="directories/add.html")
                 directory.expiration_dt = directory.activation_dt + timedelta(days=directory.requested_duration)
 
             directory = update_perms_and_save(request, form, directory)
+            form.save_m2m()
 
             # create invoice
             directory_set_inv_payment(request.user, directory, pricing)
@@ -225,7 +233,8 @@ def query_price(request):
 def edit(request, id, form_class=DirectoryForm, template_name="directories/edit.html"):
     directory = get_object_or_404(Directory, pk=id)
 
-    if not has_perm(request.user,'directories.change_directory', directory):
+    if not (has_perm(request.user,'directories.change_directory', directory) \
+            or directory.has_membership_with(request.user)):
         raise Http403
 
     if request.user.is_superuser:
@@ -253,6 +262,7 @@ def edit(request, id, form_class=DirectoryForm, template_name="directories/edit.
                     directory.logo = None
             # update all permissions and save the model
             directory = update_perms_and_save(request, form, directory)
+            form.save_m2m()
             msg_string = 'Successfully updated %s' % directory
             messages.add_message(request, messages.SUCCESS, _(msg_string))
 
@@ -298,11 +308,18 @@ def edit_meta(request, id, form_class=MetaForm, template_name="directories/edit-
 @login_required
 def get_subcategories(request):
     if request.is_ajax() and request.method == "POST":
-        category = request.POST.get('category', None)
-        if category:
-            sub_categories = DirectoryCategory.objects.filter(parent=category)
-            count = sub_categories.count()
-            sub_categories = list(sub_categories.values_list('pk','name'))
+        categories = request.POST.get('categories', None)
+        categories = [int(cat) for cat in categories.split(',') if cat.isdigit()]
+        count = 0
+        sub_categories = []
+        if categories:
+            for cat in categories:
+                sub_cats = list(DirectoryCategory.objects.filter(parent_id=cat).values_list('id', 'name'))
+                if len(sub_cats) > 0:
+                    count += len(sub_cats)
+                    cat_name = DirectoryCategory.objects.filter(id=cat).values_list('name', flat=True)[0]
+                    sub_categories.append({'cat_name': cat_name,  'sub_cats': sub_cats})
+
             data = json.dumps({"error": False,
                                "sub_categories": sub_categories,
                                "count": count})
@@ -464,6 +481,24 @@ def pending(request, template_name="directories/pending.html"):
 
     return render_to_resp(request=request, template_name=template_name,
             context={'directories': directories})
+
+
+# @is_enabled('directories')
+# @login_required
+# def publish(request, id):
+#     directory = get_object_or_404(Directory, pk=id)
+#     if directory.has_membership_with(request.user):
+#         if not directory.activation_dt:
+#             directory.activation_dt = datetime.now()
+#         directory.status = True
+#         directory.status_detail = 'active'
+#         directory.allow_anonymous_view = True
+#         directory.save()
+# 
+#         msg_string = 'Successfully published %s' % directory
+#         messages.add_message(request, messages.SUCCESS, _(msg_string))
+# 
+#     return HttpResponseRedirect(reverse('directory', args=[directory.slug]))
 
 
 @is_enabled('directories')

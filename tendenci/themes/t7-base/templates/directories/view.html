@@ -2,6 +2,7 @@
 {% load base_filters %}
 {% load base_tags %}
 {% load directory_tags %}
+{% load directory_filters %}
 
 
 {% block title %}{{ directory.get_title }}{% endblock %}
@@ -13,6 +14,17 @@
     <article id="t-directories-directory-{{ directory.pk }}" class="t-directories-directory">
         <div class="page-header">
             <h1>{{ directory.headline }}</h1>
+		   {% if directory.status_detail == 'pending' %}
+				<div class="pull-right clearfix">
+				{% if directory|is_directory_owner_with_membership:user %}
+             	<a href="{% url 'directory.edit' directory.id %}" class="btn btn-default">{% trans "Edit" %}</a>
+                {% endif %}
+             	{% if request.user.is_superuser %}
+		     	<a href="{% url 'directory.approve' directory.id %}" class="btn btn-success">{% trans "Approve it" %}</a>
+             	{% endif %}
+				</div>
+	      	
+			{% endif %}
         </div>
 
         <div class="t-directories-directory-body">
@@ -23,6 +35,10 @@
             {% endif %}
 
             {{ directory.body|safe }}
+
+			{% if directory.corpprofile %}
+			<p><a href="{% url 'corpmembership.view_profile' directory.corpprofile.id %}">{% trans "View Corp Member Profile" %}</a></p>
+			{% endif %}
         </div>
 
 		{% if directory.has_social_media %}

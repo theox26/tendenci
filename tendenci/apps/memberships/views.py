@@ -156,6 +156,34 @@ def membership_details(request, id=0, template_name="memberships/details.html"):
         })
 
 
+@is_enabled('memberships')
+@is_enabled('directories')
+@login_required
+def membership_add_directory(request, id):
+    """
+    Add a directory for this active memberships
+    """
+    membership = get_object_or_404(MembershipDefault, pk=id)
+    if not  membership.is_active() or membership.directory:
+        raise Http404
+    
+    if not get_setting('module',  'memberships', 'adddirectory'):
+        raise Http404
+    
+    has_approve_perm = has_perm(request.user, 'memberships.approve_membershipdefault') and \
+                has_perm(request.user, 'memberships.change_membershipdefault')
+                
+    if request.user.profile.is_superuser or has_approve_perm:
+        membership.add_directory()
+
+        msg_string = 'Successfully add the directory %s' % membership.directory
+        messages.add_message(request, messages.SUCCESS, _(msg_string))
+
+        return HttpResponseRedirect(reverse('membership.details', args=[membership.id]))
+
+    raise Http403
+
+
 def membership_applications(request, template_name="memberships/applications/list.html"):
 
     apps = MembershipApp.objects.all()
@@ -1083,7 +1111,7 @@ def membership_default_add(request, slug='', membership_id=None,
         [membership] = user.membershipdefault_set.filter(
             membership_type=membership_type_id).order_by('-pk')[:1] or [None]
 
-    demographics_form = DemographicsForm(app_fields, request.POST or None, request.FILES or None, membership=membership)
+    demographics_form = DemographicsForm(app_fields, request.POST or None, request.FILES or None, request=request, membership=membership)
 
     membership_initial = {}
     if membership:
