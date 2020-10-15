@@ -639,6 +639,10 @@ class EventForm(TendenciBaseForm):
     remove_photo = forms.BooleanField(label=_('Remove the current photo'), required=False)
     groups = forms.ModelMultipleChoiceField(required=True, queryset=None, help_text=_('Hold down "Control", or "Command" on a Mac, to select more than one.'))
 
+    age_range = forms.BooleanField(label=_('Age Range?'), required=False)
+    low_age = forms.IntegerField(label=_("From"), required=False)
+    high_age = forms.IntegerField(label=_("To"), required=False)
+
     FREQUENCY_CHOICES = (
         (1, '1'),
         (2, '2'),
@@ -684,6 +688,9 @@ class EventForm(TendenciBaseForm):
             'timezone',
             'priority',
             'type',
+            'age_range',
+            'low_age',
+            'high_age',
             'groups',
             'external_url',
             'photo_upload',
@@ -712,6 +719,9 @@ class EventForm(TendenciBaseForm):
                                  'end_event_date',
                                  'recurs_on',
                                  'end_recurring',
+                                 'age_range',
+                                 'low_age',
+                                 'high_age',
                                  ],
                       'legend': ''
                       }),
