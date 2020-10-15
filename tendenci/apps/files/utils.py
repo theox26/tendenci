@@ -20,6 +20,8 @@ from tendenci.libs.boto_s3.utils import read_media_file_from_s3
 from tendenci.apps.files.models import File as TFile
 from tendenci.apps.site_settings.utils import get_setting
 
+# Memcached does not accept keys longer than this.
+MEMCACHE_MAX_KEY_LENGTH = 247
 
 def get_image(file, size, pre_key, crop=False, quality=90, cache=False, unique_key=None, constrain=False):
     """
@@ -258,6 +260,10 @@ def generate_image_cache_key(file, size, pre_key, crop, unique_key, quality, con
         key = '.'.join((settings.CACHE_PRE_KEY, pre_key, unique_key, str_size, str_crop, str_quality, str_constrain))
     else:
         key = '.'.join((settings.CACHE_PRE_KEY, pre_key, str(file.size), file.name, str_size, str_crop, str_quality, str_constrain))
+        if len(key) > MEMCACHE_MAX_KEY_LENGTH:
+            truncated_file_name = file.name[:(MEMCACHE_MAX_KEY_LENGTH-1-len('.'.join((settings.CACHE_PRE_KEY, pre_key, str(file.size), str_size, str_crop, str_quality, str_constrain))))]
+            key = '.'.join((settings.CACHE_PRE_KEY, pre_key, str(file.size), truncated_file_name, str_size, str_crop, str_quality, str_constrain))
+
     # Remove spaces so key is valid for memcached
     key = key.replace(" ", "_")
 
@@ -534,7 +540,7 @@ def get_max_file_upload_size(file_module=False):
 def get_allowed_upload_file_exts(file_type='other'):
     types = {'image': ('.gif', '.jpeg', '.jpg', '.png', '.tif', '.tiff', '.bmp'),
              'video': ('.wmv', '.mov', '.mpg', '.mp4', '.m4v'),
-             'other': ('.txt', '.docx', '.csv', '.xlsx', '.ppt', '.pptx', '.pps', '.ppsx', '.vcf', '.pdf', '.zip'),
+             'other': ('.txt', '.docx', '.csv', '.xlsx', '.pptx', '.pps', '.ppsx', '.vcf', '.pdf', '.zip', '.odt', '.ods', '.odp'),
              }
     if settings.ALLOW_MP3_UPLOAD:
         types['other'] += ('.mp3',)
@@ -551,9 +557,17 @@ def get_allowed_mimetypes(file_exts):
 
     types_map = mimetypes.types_map
     allowed_mimetypes = []
+    # Add the od mimetypes map here because those OpenOffice / LibreOffice file extensions
+    # are not included in builtin mimetypes.types_map.
+    od_types_map = {
+    '.odt': 'application/vnd.oasis.opendocument.text',
+    '.ods': 'application/vnd.oasis.opendocument.spreadsheet',
+    '.odp': 'application/vnd.oasis.opendocument.presentation'}
     for ext in file_exts:
         if ext in types_map:
             mime_type = types_map[ext]
             if mime_type not in allowed_mimetypes:
                 allowed_mimetypes.append(types_map[ext])
+        elif ext in od_types_map:
+            allowed_mimetypes.append(od_types_map[ext])
     return allowed_mimetypes

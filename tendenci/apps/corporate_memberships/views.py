@@ -1,6 +1,7 @@
 from builtins import str
 import os
 import math
+from decimal import Decimal
 from datetime import datetime, date, time, timedelta
 import csv
 import operator
@@ -108,6 +109,19 @@ def free_passes_list(request,
 
 @is_enabled('corporate_memberships')
 @staff_member_required
+def corp_members_donated(request, 
+                    template_name='corporate_memberships/reports/corp_members_donated.html'):
+    corp_members = CorpMembership.objects.filter(donation_amount__gt=0
+                                   ).values('id',
+                                'corp_profile__name', 'donation_amount',
+                                'invoice', 'create_dt', 'status_detail'
+                                ).order_by('-donation_amount', 'corp_profile__name')
+
+    return render_to_resp(request=request, template_name=template_name,
+                              context={'corp_members': corp_members,})
+
+@is_enabled('corporate_memberships')
+@staff_member_required
 def free_passes_edit(request, id,
             template='corporate_memberships/free_passes_edit.html'):
     """
@@ -211,13 +225,6 @@ def corpmembership_add(request, slug='',
     """
     creator = None
     hash = request.GET.get('hash', '')
-    if not request.user.is_authenticated:
-        if hash:
-            [creator] = Creator.objects.filter(hash=hash)[:1] or [None]
-        if not creator:
-            # anonymous user - redirect them to enter their
-            # contact email before processing
-            return HttpResponseRedirect(reverse('corpmembership.add_pre'))
 
     if not slug:
         app = CorpMembershipApp.objects.current_app()
@@ -230,6 +237,18 @@ def corpmembership_add(request, slug='',
         if app.id != current_app.id:
             return HttpResponseRedirect(reverse('corpmembership_app.preview',
                                                 args=[app.slug]))
+    if not request.user.is_authenticated:
+        # handle anonymous user
+        if not has_perm(request.user, 'corporate_memberships.view_corpmembershipapp', app):
+            raise Http403
+        
+        if hash:
+            [creator] = Creator.objects.filter(hash=hash)[:1] or [None]
+        if not creator:
+            # anonymous user - redirect them to enter their
+            # contact email before processing
+            return HttpResponseRedirect(reverse('corpmembership.add_pre'))
+
     is_superuser = request.user.profile.is_superuser
 
     app_fields = app.fields.filter(display=True)
@@ -455,7 +474,8 @@ def corpmembership_edit(request, id,
 
     app_fields = app.fields.filter(display=True)
     if not is_superuser:
-        app_fields = app_fields.filter(admin_only=False)
+        if not (corp_membership.is_pending and has_perm(request.user, 'corporate_memberships.approve_corpmembership')):
+            app_fields = app_fields.filter(admin_only=False)
     if corp_membership.is_expired:
         # if it is expired, remove the expiration_dt field so they can
         # renew this corporate membership
@@ -556,6 +576,32 @@ def corpprofile_view(request, id, template="corporate_memberships/profiles/view.
                    'all_records': all_records,
                    'invoices': invoices
                    })
+
+@is_enabled('corporate_memberships')
+@is_enabled('directories')
+@login_required
+def corp_membership_add_directory(request, id):
+    """
+    Add a directory for this active corporate memberships (if directory does not exist already).
+    Only superuser can perform this action.
+    """
+    corp_profile = get_object_or_404(CorpProfile, pk=id)
+    corp_membership = corp_profile.corp_membership
+    if not corp_membership or not corp_membership.is_active or corp_profile.directory:
+        raise Http404
+    
+    if not get_setting('module',  'corporate_memberships', 'adddirectory'):
+        raise Http404
+    
+    if request.user.profile.is_superuser:
+        corp_profile.add_directory()
+
+        msg_string = 'Successfully add the directory %s' % corp_profile.directory
+        messages.add_message(request, messages.SUCCESS, _(msg_string))
+
+        return HttpResponseRedirect(reverse('corpmembership.view', args=[corp_membership.id]))
+
+    raise Http403
 
 
 @is_enabled('corporate_memberships')
@@ -717,14 +763,16 @@ def corpmembership_search(request, my_corps_only=False,
         if my_corps_only or not allow_anonymous_search:
             raise Http403
     is_superuser = request.user.profile.is_superuser
+    has_approve_perm = has_perm(request.user, 'corporate_memberships.approve_corpmembership')
 
     # legacy pending url
     query = request.GET.get('q')
     if query == 'is_pending:true':
         pending_only = True
 
-    if pending_only and not is_superuser:
-        raise Http403
+    if pending_only:
+        if not has_approve_perm:
+            raise Http403
 
     # field names for search criteria choices
     names_list = ['name', 'address', 'city', 'state',
@@ -739,7 +787,7 @@ def corpmembership_search(request, my_corps_only=False,
     except:
         cp_id = 0
 
-    if pending_only and is_superuser:
+    if pending_only and has_approve_perm:
         # pending list only for admins
         q_obj = Q(status_detail__in=['pending', 'paid - pending approval'])
         corp_members = CorpMembership.objects.filter(q_obj)
@@ -887,8 +935,7 @@ def corpmembership_approve(request, id,
                 template="corporate_memberships/applications/approve.html"):
     corporate_membership = get_object_or_404(CorpMembership, id=id)
 
-    user_is_superuser = request.user.profile.is_superuser
-    if not user_is_superuser:
+    if not has_perm(request.user, 'corporate_memberships.approve_corpmembership', corporate_membership):
         raise Http403
 
     # if not in pending, go to view page
@@ -1055,13 +1102,24 @@ def corp_renew(request, id,
 
                 opt_d = {'renewal': True,
                          'renewal_total': renewal_total}
+                if corpmembership_app.donation_enabled:
+                    # check for donation
+                    donation_option, donation_amount = form.cleaned_data.get('donation_option_value', (None, None))
+                    if donation_option:
+                        if donation_option == 'default':
+                            donation_amount = corpmembership_app.donation_default_amount
+                        if donation_amount > Decimal(0):
+                            new_corp_membership.donation_amount = donation_amount
+                            new_corp_membership.save()
+                            opt_d['donation_amount'] = donation_amount
+                
                 # create an invoice
                 inv = corp_memb_inv_add(request.user,
                                         new_corp_membership,
                                         **opt_d)
                 new_corp_membership.invoice = inv
                 new_corp_membership.save()
-                
+
                 # assign object permissions
                 corp_membership_update_perms(new_corp_membership)
 
@@ -1129,7 +1187,9 @@ def corp_renew(request, id,
                     'above_cap_price': 0,
                     'above_cap_individual_count': 0,
                     'above_cap_individual_total': 0,
-                    'total_individual_count': 0}
+                    'total_individual_count': 0,
+                    'donation_default_amount': corpmembership_app.donation_enabled and corpmembership_app.donation_default_amount,
+                    'donation_amount': 0}
     if corp_membership.corporate_membership_type.renewal_price == 0:
         summary_data['total_individual_count'] = len(get_indiv_memberships_choices(
                                                     corp_membership))
@@ -1141,6 +1201,13 @@ def corp_renew(request, id,
         except CorporateMembershipType.DoesNotExist:
             pass
         summary_data['total_individual_count'] = len(request.POST.getlist('members'))
+        
+        # donation amount
+        if corpmembership_app.donation_enabled:
+            if request.POST.get('donation_option_value_0') == 'default':
+                summary_data['donation_amount'] = corpmembership_app.donation_default_amount
+            elif request.POST.get('donation_option_value_0') == 'custom':
+                summary_data['donation_amount'] = request.POST.get('donation_option_value_1')
     else:
         cmt = corp_membership.corporate_membership_type
 

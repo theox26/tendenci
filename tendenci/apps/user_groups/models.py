@@ -63,7 +63,7 @@ class Group(TendenciBaseModel):
         app_label = 'user_groups'
 
     def __str__(self):
-        return self.label or self.name
+        return self.name
 
     def get_absolute_url(self):
         return reverse('group.detail', args=[self.slug])
@@ -169,9 +169,9 @@ class GroupMembership(models.Model):
     # because it cannot have more than two foreignKeys on User
     # http://docs.djangoproject.com/en/dev/topics/db/models/#extra-fields-on-many-to-many-relationships
     creator_id = models.IntegerField(default=0, editable=False)
-    creator_username = models.CharField(max_length=50, editable=False)
+    creator_username = models.CharField(max_length=150, editable=False)
     owner_id = models.IntegerField(default=0, editable=False)
-    owner_username = models.CharField(max_length=50, editable=False)
+    owner_username = models.CharField(max_length=150, editable=False)
     status = models.BooleanField(default=True)
     status_detail = models.CharField(max_length=50,
                                      choices=STATUS_CHOICES,

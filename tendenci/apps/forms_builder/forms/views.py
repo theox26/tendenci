@@ -468,21 +468,26 @@ def form_detail(request, slug, template="forms/form_detail.html"):
             if email_copies or email_recipients:
                 # prepare attachments
                 attachments = []
-                try:
-                    for f in form_for_form.files.values():
-                        f.seek(0)
-                        attachments.append((f.name, f.read()))
-                except ValueError:
-                    attachments = []
-                    for field_entry in entry.fields.all():
-                        if field_entry.field.field_type == 'FileField':
-                            try:
-                                f = default_storage.open(field_entry.value)
-                            except IOError:
-                                pass
-                            else:
-                                f.seek(0)
-                                attachments.append((f.name.split('/')[-1], f.read()))
+                # Commenting out the attachment block to not add attachments to the email for the reason below:
+                # According to SES message quotas https://docs.aws.amazon.com/ses/latest/DeveloperGuide/quotas.html, 
+                # the maximum message size (including attachments) is 10 MB per message (after base64 encoding) 
+                # which means the actual size should be less than 7.5 MB or so because text after encoded with the BASE64 
+                # algorithm increases its size by 1/3. But the allowed upload size is much larger than 7.5 MB.
+#                 try:
+#                     for f in form_for_form.files.values():
+#                         f.seek(0)
+#                         attachments.append((f.name, f.read()))
+#                 except ValueError:
+#                     attachments = []
+#                     for field_entry in entry.fields.all():
+#                         if field_entry.field.field_type == 'FileField':
+#                             try:
+#                                 f = default_storage.open(field_entry.value)
+#                             except IOError:
+#                                 pass
+#                             else:
+#                                 f.seek(0)
+#                                 attachments.append((f.name.split('/')[-1], f.read()))
 
                 # Send message to the email addresses listed in the copies
                 if email_copies:
@@ -552,10 +557,11 @@ def form_detail(request, slug, template="forms/form_detail.html"):
                     EventLog.objects.log(instance=form)
 
                     # redirect to online payment
-                    if (entry.payment_method.machine_name).lower() == 'credit-card':
-                        return redirect('payment.pay_online', invoice.id, invoice.guid)
-                    # redirect to invoice page
-                    return redirect('invoice.view', invoice.id, invoice.guid)
+                    if invoice.balance > 0:
+                        if (entry.payment_method.machine_name).lower() == 'credit-card':
+                            return redirect('payment.pay_online', invoice.id, invoice.guid)
+                        # redirect to invoice page
+                        return redirect('invoice.view', invoice.id, invoice.guid)
 
             # default redirect
             if form.completion_url:
@@ -657,10 +663,7 @@ def files(request, id):
     """
     import os
     import mimetypes
-    from django.http import Http404
     from django.core.files.base import ContentFile
-    from django.core.files.storage import default_storage
-    from tendenci.apps.perms.utils import has_view_perm
     from tendenci.apps.forms_builder.forms.models import FieldEntry
 
     field = get_object_or_404(FieldEntry, pk=id)
@@ -669,7 +672,7 @@ def files(request, id):
     base_name = os.path.basename(field.value)
     mime_type = mimetypes.guess_type(base_name)[0]
 
-    if not has_view_perm(request.user, 'forms.view_form', form):
+    if not has_perm(request.user,'forms.change_form', form):
         raise Http403
 
     if not mime_type:

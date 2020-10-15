@@ -13,6 +13,10 @@
         <li><strong>{% trans "Source:" %}</strong> <span>{{ directory.source|urlize }}</span></li>
     {% endif %}
 
+   {% if directory.region %}
+        <li><strong>{% trans "Region:" %}</strong> <span>{{ directory.region }}</span></li>
+    {% endif %}
+
     {% if show_contact|default:False %}
         <address>
             {% if directory.first_name and directory.last_name %}
@@ -63,18 +67,26 @@
         </address>
     {% endif %}
 
-    {% with directory.cat as directory_cat %}
-        {% if directory_cat %}
-            <li>
-                <ul class="list-inline">
-                    <li><strong>{% trans "Category:" %}</strong> <a href="{% url 'directories' %}?cat={{ directory_cat.pk }}">{{ directory_cat.name }}</a></li>
-                    {% if directory.sub_cat %}
-                        <li>|</li>
-                        <li><strong>{% trans "Subcategory:" %}</strong> <a href="{% url 'directories' %}?cat={{ directory_cat.pk }}&sub_cat={{ directory.sub_cat.pk }}">{{ directory.sub_cat.name }}</a></li>
-                    {% endif %}
-                </ul>
-            </li>
-        {% endif %}
+	{% with directory.cats_list as cats_list %}
+    {% if cats_list %}
+        <li>
+           {% for cat, sub_cats in cats_list %}
+               <ul class="list-inline">
+                <li><strong>{% trans "Category:" %}</strong> 
+                   <a href="{% url 'directories' %}?cat={{ cat.pk }}">{{ cat.name }}</a>
+                 </li>
+                 {% if sub_cats %}
+                    <li>|</li>
+                    <li><strong>{% trans "Subcategory:" %}</strong> 
+                       {% for sub_cat in sub_cats %}
+                       <a href="{% url 'directories' %}?sub_cat={{ sub_cat.pk }}">{{ sub_cat.name }}</a>{% if not forloop.last %}, {% endif %}
+                       {% endfor %}
+                    </li>
+				{% endif %}
+			 </ul>
+	      {% endfor %}
+        </li>
+    {% endif %}
     {% endwith %}
 
     {% if directory.tags %}
@@ -91,7 +103,7 @@
             {% if user == directory.creator or user == directory.owner %}
                 <li><strong>{% trans "Owned by you" %}</strong></li>
                 {% if not directory.status_detail == "active" %}
-                    <li><strong>{% trans "Status:" %}</strong> <span>{{ directory.obj_status }}</span></li>
+                    <li><strong>{% trans "Status:" %}</strong> <span class="text-warning">{{ directory.status_detail|capfirst }}</span></li>
                 {% endif %}
             {% endif %}
         {% endif %}

@@ -33,6 +33,7 @@ from tendenci.apps.invoices.models import Invoice
 from tendenci.apps.invoices.forms import AdminNotesForm, AdminVoidForm, AdminAdjustForm, InvoiceSearchForm, EmailInvoiceForm
 from tendenci.apps.invoices.utils import invoice_pdf
 from tendenci.apps.emails.models import Email
+from tendenci.apps.site_settings.utils import get_setting
 
 
 @is_enabled('invoices')
@@ -62,9 +63,8 @@ def view(request, id, guid=None, form_class=AdminNotesForm, template_name="invoi
     notify = request.GET.get('notify', u'')
     guid = guid or u''
 
-    merchant_login = (  # boolean value
-        hasattr(settings, 'MERCHANT_LOGIN') and
-        settings.MERCHANT_LOGIN)
+    # boolean value
+    merchant_login = get_setting("site", "global", "merchantaccount") != 'asdf asdf asdf'
 
     obj = invoice.get_object()
     obj_name = u''

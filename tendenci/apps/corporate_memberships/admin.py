@@ -106,6 +106,9 @@ class CorpMembershipAppAdmin(admin.ModelAdmin):
                            'memb_app'
                            )},),
         (_('Parent Entities'), {'fields': ('parent_entities',)}),
+        (_('Donation'), {'fields': ('donation_enabled', 'donation_label', 'donation_default_amount'),
+                         'description': _('If donation is enabled, a field will be added to the application\
+                         on renewal to allow users to select the default amount or specify an amount to donate')}),
         (_('Permissions'), {'fields': ('allow_anonymous_view',)}),
         (_('Advanced Permissions'), {'classes': ('collapse',), 'fields': (
             'user_perms',
@@ -504,8 +507,12 @@ class CorpMembershipAppField2Admin(admin.ModelAdmin):
 
         return obj
 
-    def has_delete_permission(self, request, obj=None):
-        return False
+    def change_view(self, request, object_id=None, form_url='', extra_context=None):
+        return super(CorpMembershipAppField2Admin, self).change_view(request, object_id, form_url,
+                               extra_context=dict(show_delete=False))
+
+#     def has_delete_permission(self, request, obj=None):
+#         return False
 
     def has_add_permission(self, request):
         return False

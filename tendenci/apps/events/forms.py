@@ -29,7 +29,7 @@ from tendenci.apps.events.models import (
     Sponsor, Organizer, Speaker, Type, TypeColorSet,
     RegConfPricing, Addon, AddonOption, CustomRegForm,
     CustomRegField, CustomRegFormEntry, CustomRegFieldEntry,
-    RecurringEvent
+    RecurringEvent, Registrant
 )
 
 from form_utils.forms import BetterModelForm
@@ -310,6 +310,10 @@ class FormForCustomRegForm(forms.ModelForm):
             self.default_pricing = getattr(self.event, 'default_pricing', None)
 
         super(FormForCustomRegForm, self).__init__(*args, **kwargs)
+        
+        max_length_dict = dict([(field.name, field.max_length) for field in Registrant._meta.fields\
+                                if hasattr(field, 'max_length')])
+        
         for field in self.form_fields:
             if field.map_to_field:
                 field_key = field.map_to_field
@@ -327,7 +331,10 @@ class FormForCustomRegForm(forms.ModelForm):
             field_args = {"label": mark_safe(field.label), "required": field.required}
             arg_names = field_class.__init__.__code__.co_varnames
             if "max_length" in arg_names:
-                field_args["max_length"] = FIELD_MAX_LENGTH
+                if field.map_to_field and field.map_to_field in max_length_dict:
+                    field_args["max_length"] = max_length_dict[field.map_to_field]
+                else:
+                    field_args["max_length"] = FIELD_MAX_LENGTH
             if "choices" in arg_names:
                 choices = field.choices.split(",")
                 field_args["choices"] = list(zip(choices, choices))
@@ -391,7 +398,7 @@ class FormForCustomRegForm(forms.ModelForm):
         if hasattr(self.event, 'has_member_price') and \
                     get_setting('module', 'events', 'requiresmemberid') and \
                     self.event.has_member_price:
-            self.fields['memberid'] = forms.CharField(label=_('Member ID'), required=False,
+            self.fields['memberid'] = forms.CharField(label=_('Member ID'), max_length=50, required=False,
                                 help_text=_('Please enter a member ID if a member price is selected.'))
 
         # add override and override_price to allow admin override the price
@@ -1158,7 +1165,7 @@ class Reg8nConfPricingForm(FormControlWidgetMixin, BetterModelForm):
     end_dt = forms.SplitDateTimeField(label=_('End Date/Time'), initial=datetime.now()+timedelta(days=30,hours=6), help_text=_('The date time this price ceases to be available'))
     price = PriceField(label=_('Price'), max_digits=21, decimal_places=2, initial=0.00)
     #dates = Reg8nDtField(label=_("Start and End"), required=False)
-    groups = forms.MultipleChoiceField(required=False, choices=[])
+    groups = forms.ModelMultipleChoiceField(required=False, queryset=None, help_text=_('Hold down "Control", or "Command" on a Mac, to select more than one.'))
     payment_required = forms.ChoiceField(required=False,
                                          choices=(('True', _('Yes')), ('False', _('No'))),
                                          initial='True')
@@ -1177,34 +1184,11 @@ class Reg8nConfPricingForm(FormControlWidgetMixin, BetterModelForm):
 
         default_groups = Group.objects.filter(status=True, status_detail="active")
 
-        if self.user and not self.user.profile.is_superuser:
+        if not self.user or not self.user.profile.is_superuser:
             filters = get_query_filters(self.user, 'user_groups.view_group', **{'perms_field': False})
-            groups = default_groups.filter(filters).distinct()
-            groups_list = list(groups.values_list('pk', 'name'))
+            default_groups = default_groups.filter(filters).distinct()
 
-            users_groups = self.user.profile.get_groups()
-            for g in users_groups:
-                if [g.id, g.name] not in groups_list:
-                    groups_list.append([g.id, g.name])
-        else:
-            groups_list = list(default_groups.values_list('pk', 'name'))
-
-        groups_list.insert(0, ['', '------------'])
-        self.fields['groups'].choices = groups_list
-
-    def clean_groups(self):
-        group_list = self.cleaned_data['groups']
-        groups = []
-
-        for group_id in group_list:
-            if group_id:
-                try:
-                    Group.objects.get(pk=group_id)
-                    groups.append(group_id)
-                except Group.DoesNotExist:
-                    raise forms.ValidationError(_('Invalid group selected.'))
-
-        return Group.objects.filter(pk__in=groups)
+        self.fields['groups'].queryset = default_groups
 
     def clean_tax_rate(self):
         tax_rate = self.cleaned_data['tax_rate']
@@ -1752,6 +1736,9 @@ class RegistrantForm(forms.Form):
         super(RegistrantForm, self).__init__(*args, **kwargs)
 
         reg_conf=self.event.registration_configuration
+        
+        max_length_dict = dict([(field.name, field.max_length) for field in Registrant._meta.fields\
+                                if hasattr(field, 'max_length') and field.name in self.FIELD_NAMES])
 
         # add changes in the stardard registration form
         for field_name in self.FIELD_NAMES:
@@ -1770,7 +1757,10 @@ class RegistrantForm(forms.Form):
                     field_class = getattr(forms, field_class)
                 arg_names = field_class.__init__.__code__.co_varnames
                 if "max_length" in arg_names:
-                    field_args["max_length"] = 100
+                    if field_name in max_length_dict:
+                        field_args["max_length"] = max_length_dict[field_name]
+                    else:
+                        field_args["max_length"] = 50
                 if "choices" in arg_names:
                     choices = get_setting('module', 'events', 'regform_%s_choices' % field_name)
                     choices = choices.split(",")
@@ -1811,7 +1801,7 @@ class RegistrantForm(forms.Form):
         if hasattr(self.event, 'has_member_price') and \
                  get_setting('module', 'events', 'requiresmemberid') and \
                  self.event.has_member_price:
-            self.fields['memberid'] = forms.CharField(label=_('Member ID'), required=False,
+            self.fields['memberid'] = forms.CharField(label=_('Member ID'), max_length=50, required=False,
                                 help_text=_('Please enter a member ID if a member price is selected.'))
 
         if not self.event.is_table and not self.event.free_event:

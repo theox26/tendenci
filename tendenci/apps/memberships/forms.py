@@ -2,6 +2,7 @@ from builtins import str
 import decimal
 from datetime import datetime
 import requests
+import chardet
 
 from django import forms
 from django.contrib.auth.models import User
@@ -42,6 +43,7 @@ from tendenci.apps.perms.forms import TendenciBaseForm
 from tendenci.apps.profiles.models import Profile
 from tendenci.apps.site_settings.utils import get_setting
 from tendenci.apps.base.utils import tcurrency
+from tendenci.apps.files.validators import FileValidator
 
 
 THIS_YEAR = datetime.today().year
@@ -339,7 +341,9 @@ class MembershipDefaultUploadForm(forms.ModelForm):
         if not key:
             raise forms.ValidationError(_('Please specify the key to identify duplicates'))
 
-        file_content = upload_file.read().decode("utf-8")
+        file_content = upload_file.read()
+        encoding = chardet.detect(file_content)['encoding']
+        file_content = file_content.decode(encoding)
         upload_file.seek(0)
         header_line_index = file_content.find('\n')
         header_list = ((file_content[:header_line_index]
@@ -778,7 +782,7 @@ class UserForm(FormControlWidgetMixin, forms.ModelForm):
             user.last_name = user.last_name or user_attrs['last_name']
         else:
             created = True
-            user_attrs['username'] = user_attrs['username'] or \
+            user_attrs['username'] = user_attrs['username'] or user_attrs['email'] or \
                 Profile.spawn_username(user_attrs['first_name'][:1], user_attrs['last_name'])
 
             user = User.objects.create_user(
@@ -989,7 +993,7 @@ class DemographicsForm(FormControlWidgetMixin, forms.ModelForm):
                     ud_field = MembershipAppField.objects.get(field_name=field_name,
                         membership_app=self.app, display=True)
                     if ud_field.field_type == u'FileField':
-                        self.fields[field_name] = forms.FileField(label=ud_field.label, required=False)
+                        self.fields[field_name] = forms.FileField(label=ud_field.label, required=False, validators=[FileValidator()])
                         file_instance = get_ud_file_instance(self.demographics, field_name)
 
                         if file_instance:
@@ -999,6 +1003,28 @@ class DemographicsForm(FormControlWidgetMixin, forms.ModelForm):
                         self.fields[field_name].initial = getattr(self.demographics, field_name)
 
         self.add_form_control_class()
+        
+    def assign_file_perms(self, file_instance):
+        """
+        Assign permissions for the uploaded file.
+        """
+        member_protection = get_setting('module', 'memberships', 'memberprotection')
+        # set perms
+        file_instance.allow_anonymous_view = False
+        file_instance.allow_user_view = False
+        file_instance.allow_member_view = False
+        file_instance.is_public = False
+        
+        if member_protection == 'public':
+            file_instance.allow_anonymous_view = True
+            file_instance.is_public = True
+        elif member_protection == 'all-members':
+            file_instance.allow_member_view = True
+        if self.request and self.request.user.is_authenticated:
+            file_instance.creator = self.request.user
+            file_instance.creator_username = self.request.user.username
+            file_instance.owner = self.request.user
+            file_instance.owner_username = self.request.user.username
 
     def save(self, commit=True, *args, **kwargs):
         pks ={}
@@ -1025,6 +1051,8 @@ class DemographicsForm(FormControlWidgetMixin, forms.ModelForm):
                         file_instance.file = new_file
                     else:
                         file_instance = MembershipFile(file=new_file)
+
+                    self.assign_file_perms(file_instance)
 
                     file_instance.save()
                     data = {
