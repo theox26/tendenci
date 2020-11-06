@@ -3,6 +3,7 @@ import random
 from datetime import datetime, timedelta
 from operator import or_
 from functools import reduce
+from collections import Counter
 
 from django.db import models
 from django.db.models import Q
@@ -10,7 +11,7 @@ from django.contrib.auth.models import AnonymousUser, User
 from django.template import Node, Library, TemplateSyntaxError, Variable
 from django.utils.translation import ugettext_lazy as _
 
-from tendenci.apps.events.models import Event, Registrant, Type
+from tendenci.apps.events.models import Event, Registration, Registrant, Type
 from tendenci.apps.events.utils import (registration_earliest_time,
                                         registration_has_started,
                                         registration_has_ended,)
@@ -105,6 +106,35 @@ def registration_pricing_and_button(context, event, user):
     if hasattr(user, 'registrant_set'):
         is_registrant = user.registrant_set.filter(
             registration__event=event).exists()
+
+    context.update({
+        'now': datetime.now(),
+        'event': event,
+        'limit': limit,
+        'spots_taken': spots_taken,
+        'spots_available': spots_available,
+        'registration': registration,
+        'reg_started': reg_started,
+        'reg_ended': reg_ended,
+        'earliest_time': earliest_time,
+        'pricing': pricing,
+        'user': user,
+        'is_registrant': is_registrant,
+    })
+
+    return context
+
+@register.inclusion_tag('events/reg8n/registration_invoice.html', takes_context=True)
+def registrants_for_invoice(context, registration):
+    # an array of tuples for the reg info
+    
+    registrants = registration.registrant_set.all().order_by('id')
+    reg_types = Counter(registrants).keys()
+    for registrant in registrants:
+        # fill the tuple Pricing cost, name, and count
+        #count sum(p.pricing.title == "General" for p in registrants)
+        registrant.amount
+        registrant.pricing.title # this might be just for custom pricing, need a fall back
 
     context.update({
         'now': datetime.now(),
