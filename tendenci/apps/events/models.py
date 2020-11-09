@@ -661,20 +661,17 @@ class Registration(models.Model):
 
     def get_registrants_by_price_option(self):
         """
-        Returns a dictionary with the 'price option name': (registrant count, $amount)
+        Returns a dictionary of lists
+        with the layout => 'price option name': [registrant count, $amount]
         """
         reg_by_options = {}
 
         registrants = self.registrant_set.all().order_by('id')
         for registrant in registrants:
-            # fill the tuple Pricing cost, name, and count
-            #count sum(p.pricing.title == "General" for p in registrants)
-
             if registrant.pricing.title in reg_by_options:
-                # tuples are immutable
-                reg_by_options[registrant.pricing.title] = (reg_by_options[registrant.pricing.title][0] + 1, registrant.amount)  
+                reg_by_options[registrant.pricing.title][0] += 1
             else:
-                reg_by_options[registrant.pricing.title] = (1, registrant.amount)
+                reg_by_options[registrant.pricing.title] = [1, registrant.amount]
             
         return reg_by_options
 
