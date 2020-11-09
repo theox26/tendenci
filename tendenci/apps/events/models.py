@@ -4,6 +4,8 @@ from hashlib import md5
 import operator
 from datetime import datetime, timedelta
 from functools import reduce
+from collections import Counter
+
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
@@ -656,6 +658,25 @@ class Registration(models.Model):
                 return 'registered-with-balance'
         else:
             return 'registered'
+
+    def get_registrants_by_price_option(self):
+        """
+        Returns a dictionary with the 'price option name': (registrant count, $amount)
+        """
+        reg_by_options = {}
+
+        registrants = self.registrant_set.all().order_by('id')
+        for registrant in registrants:
+            # fill the tuple Pricing cost, name, and count
+            #count sum(p.pricing.title == "General" for p in registrants)
+
+            if registrant.pricing.title in reg_by_options:
+                # tuples are immutable
+                reg_by_options[registrant.pricing.title] = (reg_by_options[registrant.pricing.title][0] + 1, registrant.amount)  
+            else:
+                reg_by_options[registrant.pricing.title] = (1, registrant.amount)
+            
+        return reg_by_options
 
     @property
     def registrant(self):
