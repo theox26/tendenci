@@ -42,7 +42,8 @@ class Profile(Person):
 
     SEX_CHOICES = (
         ('male', _(u'Male')),
-        ('female', _(u'Female'))
+        ('female', _(u'Female')),
+        ('enby', _(u'Non-Binary')),
     )
 
     # relations
