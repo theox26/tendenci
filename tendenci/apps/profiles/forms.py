@@ -23,6 +23,12 @@ from tendenci.apps.perms.utils import get_query_filters
 
 attrs_dict = {'class': 'required' }
 THIS_YEAR = datetime.date.today().year
+SEX_CHOICES = (
+        ('male', _(u'Male')),
+        ('female', _(u'Female')),
+        ('enby', _(u'Non-Binary')),
+    )
+
 # this is the list of apps whose permissions will be displayed on the permission edit page
 APPS = ('profiles', 'user_groups', 'articles',
         'news', 'pages', 'jobs', 'locations',
@@ -113,6 +119,8 @@ class ProfileForm(TendenciBaseForm):
     display_name = forms.CharField(label=_("Display name"), max_length=100, required=False,
                                widget=forms.TextInput(attrs={'size':'30'}))
 
+    phone = forms.CharField(required=True, initial='(###) ###-####')
+
     url = forms.CharField(label=_("Web Site"), max_length=100, required=False,
                                widget=forms.TextInput(attrs={'size':'40'}))
     company = forms.CharField(label=_("Company"), max_length=100, required=False,
@@ -120,18 +128,18 @@ class ProfileForm(TendenciBaseForm):
                                widget=forms.TextInput(attrs={'size':'45'}))
     department = forms.CharField(label=_("Department"), max_length=50, required=False,
                                widget=forms.TextInput(attrs={'size':'35'}))
-    address = forms.CharField(label=_("Address"), max_length=150, required=False,
+    address = forms.CharField(label=_("Address"), max_length=150, required=True,
                               error_messages={'required': _('Address is a required field.')},
                                widget=forms.TextInput(attrs={'size':'45'}))
     address2 = forms.CharField(label=_("Address2"), max_length=100, required=False,
                                widget=forms.TextInput(attrs={'size':'40'}))
-    city = forms.CharField(label=_("City"), max_length=50, required=False,
+    city = forms.CharField(label=_("City"), max_length=50, required=True,
                            error_messages={'required': _('City is a required field.')},
                                widget=forms.TextInput(attrs={'size':'15'}))
-    state = forms.CharField(label=_("State"), max_length=50, required=False,
+    state = forms.CharField(label=_("State"), max_length=50, required=True,
                             error_messages={'required': _('State is a required field.')},
                                widget=forms.TextInput(attrs={'size':'5'}))
-    zipcode = forms.CharField(label=_("Zipcode"), max_length=50, required=False,
+    zipcode = forms.CharField(label=_("Zipcode"), max_length=50, required=True,
                               error_messages={'required': _('Zipcode is a required field.')},
                                widget=forms.TextInput(attrs={'size':'10'}))
     country = CountrySelectField(label=_("Country"), required=False)
@@ -169,13 +177,14 @@ class ProfileForm(TendenciBaseForm):
                                                                 ('superuser',_('Superuser')),))
     interactive = forms.ChoiceField(initial=1, choices=((1,'Interactive'),
                                                           (0,_('Not Interactive (no login)')),))
-    direct_mail =  forms.ChoiceField(initial=True, choices=((True, _('Yes')),(False, _('No')),))
+    direct_mail =  forms.BooleanField(label=_("Opt In:"), initial=False, required=False, help_text='Would you like to receive exclusive information about events and offers at Keystone Kidspace?')
     notes = forms.CharField(label=_("Notes"), max_length=1000, required=False,
                                widget=forms.Textarea(attrs={'rows':'3'}))
     admin_notes = forms.CharField(label=_("Admin Notes"), max_length=1000, required=False,
                                widget=forms.Textarea(attrs={'rows':'3'}))
     language = forms.ChoiceField(initial="en", choices=get_languages_with_local_name())
-    dob = forms.DateField(required=False, widget=SelectDateWidget(None, list(range(1920, THIS_YEAR))))
+    dob = forms.DateField(required=True, widget=SelectDateWidget(None, list(range(1920, THIS_YEAR))))
+    sex = forms.ChoiceField(label=_("Gender"), required=True, choices=SEX_CHOICES)
 
     status_detail = forms.ChoiceField(
         choices=(('active',_('Active')),('inactive',_('Inactive')), ('pending',_('Pending')),))
