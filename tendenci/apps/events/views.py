@@ -1828,8 +1828,9 @@ def register(request, event_id=0,
         if not pricings:
             raise Http404
 
-        if len(pricings) > 1:
-            return HttpResponseRedirect(reverse('event.register_pre', args=(event.pk,),))
+        # This provides nothing the current page doesn't already provide
+        # if len(pricings) > 1:
+        #    return HttpResponseRedirect(reverse('event.register_pre', args=(event.pk,),))
 
         pricing = pricings[0]
         if pricing.quantity == 1:
@@ -2190,6 +2191,7 @@ def register(request, event_id=0,
         'price_list':price_list,
         'total_price':total_price,
         'pricing': pricing,
+        'pricings': pricings,
         'reg_form':reg_form,
         'custom_reg_form': custom_reg_form,
         'registrant': registrant,
