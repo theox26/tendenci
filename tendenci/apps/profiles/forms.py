@@ -183,7 +183,7 @@ class ProfileForm(TendenciBaseForm):
     admin_notes = forms.CharField(label=_("Admin Notes"), max_length=1000, required=False,
                                widget=forms.Textarea(attrs={'rows':'3'}))
     language = forms.ChoiceField(initial="en", choices=get_languages_with_local_name())
-    dob = forms.DateField(required=True, widget=SelectDateWidget(None, list(range(1920, THIS_YEAR))))
+    dob = forms.DateField(required=True, widget=SelectDateWidget(None, reversed(list(range(1920, THIS_YEAR)))))
     sex = forms.ChoiceField(label=_("Gender"), required=True, choices=SEX_CHOICES)
 
     status_detail = forms.ChoiceField(
